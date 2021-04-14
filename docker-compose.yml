@@ -1,0 +1,93 @@
+version: '3'
+
+volumes:
+    payments_db_data:
+    refunds_db_data:
+
+networks:
+    payments_network:
+        driver: bridge
+    refunds_network:
+        driver: bridge
+    switch_network:
+        driver: bridge
+
+services:
+    payments_db:
+        image: postgres:9.6
+        environment:
+            POSTGRES_DB: "payments"
+            POSTGRES_PASSWORD: "${PAYMENTS_DB_PASS}"
+        ports:
+            - "${PAYMENTS_DB_PORT}:5432"
+        volumes:
+            # data volume
+            - payments_db_data:/var/lib/postgresql/data
+            # scripts
+            - ./payments/db_scripts:/payments/db_scripts
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U postgres"]
+            interval: 5s
+            timeout: 5s
+            retries: 5
+        networks:
+            - payments_network
+
+    refunds_db:
+        image: postgres:9.6
+        environment:
+            POSTGRES_DB: "refunds"
+            POSTGRES_PASSWORD: "${REFUNDS_DB_PASS}"
+        ports:
+            - "${REFUNDS_DB_PORT}:5432"
+        volumes:
+            # data volume
+            - refunds_db_data:/var/lib/postgresql/data
+            # scripts
+            - ./refunds/db_scripts:/refunds/db_scripts
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U postgres"]
+            interval: 5s
+            timeout: 5s
+            retries: 5
+        networks:
+            - refunds_network
+
+    payments:
+        build: payments
+        volumes:
+            - ./payments:/payments
+        working_dir: /payments
+        ports:
+            - "${PAYMENTS_PORT}:${PAYMENTS_PORT}"
+        command: sh -c "source ./start.sh && python manage.py migrate && python manage.py runserver 0.0.0.0:${PAYMENTS_PORT}"
+        environment:
+            DB_HOST: "payments_db"
+            DB_NAME: "payments"
+            DB_USER: "postgres"
+            DB_PASS: "${PAYMENTS_DB_PASS}"
+        networks:
+            - payments_network
+            - switch_network
+        depends_on:
+            - payments_db
+
+    refunds:
+        build: refunds
+        volumes:
+            - ./refunds:/refunds
+        working_dir: /refunds
+        ports:
+            - "${REFUNDS_PORT}:${REFUNDS_PORT}"
+        command: sh -c "source ./start.sh && python manage.py migrate && python manage.py runserver 0.0.0.0:${REFUNDS_PORT}"
+        environment:
+            DB_HOST: "refunds_db"
+            DB_NAME: "refunds"
+            DB_USER: "postgres"
+            DB_PASS: "${REFUNDS_DB_PASS}"
+            PAYMENTS_PORT: "${PAYMENTS_PORT}"
+        networks:
+            - refunds_network
+            - switch_network
+        depends_on:
+            - refunds_db

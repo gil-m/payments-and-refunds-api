@@ -1,0 +1,4 @@
+docker-compose down
+docker volume rm switch-challenge_payments_db_data switch-challenge_refunds_db_data
+docker container rm switch-challenge_refunds switch-challenge_payments
+docker image rm switch-challenge_payments switch-challenge_refunds
